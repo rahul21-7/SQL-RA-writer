@@ -8,42 +8,33 @@ import (
 	"github.com/tmc/langchaingo/llms/openai"
 )
 
-// PredictRA takes the user question and the DB schema and returns the RA string.
-func PredictRA(question string, schemaContext string) (string, error) {
+func PredictRA(question string, dbID string) (string, error) {
 	ctx := context.Background()
 
-	// 1. Setup connection to your LOCAL Python server
-	// We use the OpenAI driver because it matches the JSON format we set up in Flask.
 	llm, err := openai.New(
-		openai.WithBaseURL("http://localhost:8000/v1"), // Matches Flask port 8000
-		openai.WithToken("no-token-needed"),            
-		openai.WithModel("llama-3.2-ra"),               
+		openai.WithBaseURL("http://localhost:8000/v1"),
+		openai.WithToken("no-token-needed"),
 	)
-
 	if err != nil {
 		return "", fmt.Errorf("failed to connect to local AI server: %v", err)
 	}
 
-	// 2. The Prompt Template
-	// IMPORTANT: This must match the format the model saw during training!
+	// This template MUST match your train_ra.json "instruction" and "input" keys
 	promptTemplate := `Below is an instruction that describes a task. Write a response that appropriately completes the request.
 
 ### Instruction:
-You are a database expert. Convert the following natural language question into Relational Algebra (RA).
-Use standard operators: σ (select), π (project), ⨝ (join), γ (aggregate).
+Convert the SQL query to Relational Algebra.
 
 ### Input:
-Schema: %s
 Question: %s
+Database: %s
 
 ### Response (RA):`
 
-	fullPrompt := fmt.Sprintf(promptTemplate, schemaContext, question)
+	fullPrompt := fmt.Sprintf(promptTemplate, question, dbID)
 
-	// 3. Generate the response
-	// We use GenerateFromSinglePrompt which sends a POST to /v1/completions
 	response, err := llms.GenerateFromSinglePrompt(ctx, llm, fullPrompt,
-		llms.WithTemperature(0.1), // Low temperature for mathematical precision
+		llms.WithTemperature(0.1), 
 		llms.WithMaxTokens(128),
 	)
 

@@ -1,65 +1,69 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
-	"strings"
 
-	"ra-sql-agent/internal/agent"
+	"ra-sql-agent/internal/algebra"
 	"ra-sql-agent/internal/schema"
+
+	_ "github.com/glebarez/go-sqlite" // NO CGO REQUIRED
 )
 
 func main() {
 	// 1. Load Data
+	// 1. Load Data
 	allSchemas, err := schema.LoadMetadata("./data/tables.json")
 	if err != nil {
-		log.Fatalf("Failed to load tables: %v", err)
+		log.Fatalf("Error loading metadata: %v", err)
 	}
+	fmt.Printf("📂 Loaded %d database schemas\n", len(allSchemas)) // Now it's used!
 
 	questions, err := schema.LoadQuestions("./data/train_spider.json")
 	if err != nil {
-		log.Fatalf("Failed to load questions: %v", err)
+		log.Fatalf("Error loading questions: %v", err)
 	}
 
-	// 2. Select a test case (The "Department Management" example)
+	// 2. Setup Test Case
 	testQ := questions[0]
-	dbSchema := schema.GetSchemaForDB(testQ.DBID, allSchemas)
+	fmt.Printf("🚀 STARTING AGENT\nQuestion: %s\nTarget DB: %s\n", testQ.Question, testQ.DBID)
 
-	if dbSchema == nil {
-		log.Fatal("DB Schema not found")
+	// 3. MOCK RA (The goal for your next fine-tuning)
+	mockRA := &algebra.RAExpression{
+		Type:    algebra.Aggregate,
+		Columns: []string{"COUNT(*)"},
+		Input: &algebra.RAExpression{
+			Type:      algebra.Selection,
+			Condition: "age > 56",
+			Input:     &algebra.RAExpression{Type: algebra.Relation, Table: "head"},
+		},
 	}
 
-	// 3. Build the Schema Context string for the AI
-	var sb strings.Builder
-	for i, tableName := range dbSchema.TableNamesOriginal {
-		sb.WriteString(fmt.Sprintf("Table %s(", tableName) )
-		cols := []string{}
-		for _, col := range dbSchema.ColumnNamesOriginal {
-			// Column format in Spider: [table_index, "column_name"]
-			if int(col[0].(float64)) == i {
-				cols = append(cols, col[1].(string))
-			}
-		}
-		sb.WriteString(strings.Join(cols, ", ") + "); ")
-	}
-	schemaContext := sb.String()
+	// 4. Translate to SQL using your new translator
+	generatedSQL := mockRA.ToSQL()
+	fmt.Printf("\n🛠️ Generated SQL: %s\n", generatedSQL)
 
-	fmt.Println("🚀 --- STARTING AI AGENT ---")
-	fmt.Printf("Question: %s\n", testQ.Question)
-	fmt.Printf("Context:  %s\n", schemaContext)
+	// 5. Connect to Database (Pure Go Driver)
+	dbPath := fmt.Sprintf("./data/database/%s/%s.sqlite", testQ.DBID, testQ.DBID)
 
-	// 4. Call the Python AI Server
-	fmt.Println("\n🤖 AI is generating Relational Algebra...")
-	prediction, err := agent.PredictRA(testQ.Question, schemaContext)
+	// Use "sqlite" here, NOT "sqlite3"
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
-		fmt.Printf("❌ AI Error: %v\n", err)
-		fmt.Println("Check: Is python/server.py running on port 8000?")
-		return
+		log.Fatalf("Failed to connect to DB: %v", err)
+	}
+	defer db.Close()
+
+	// 6. Execute and Print Results
+	fmt.Println("💾 Querying Database...")
+	var count int
+	err = db.QueryRow(generatedSQL).Scan(&count)
+	if err != nil {
+		log.Fatalf("SQL Execution Error: %v\nCheck: Does the file exist at %s?", err, dbPath)
 	}
 
-	// 5. Display Results
 	fmt.Println("\n------------------------------------")
-	fmt.Printf("🎯 GOLD SQL:  %s\n", testQ.SQL)
-	fmt.Printf("📐 AI OUTPUT: %s\n", prediction)
+	fmt.Printf("✅ DATABASE RESULT: %d\n", count)
+	fmt.Printf("🎯 GOLD SQL WAS:   %s\n", testQ.SQL)
 	fmt.Println("------------------------------------")
 }
