@@ -3,56 +3,63 @@ package main
 import (
 	"fmt"
 	"log"
-	"ra-sql-agent/internal/schema"  
-	"ra-sql-agent/internal/algebra" // ✅ Fixed: Must use full path from go.mod
+	"strings"
+
+	"ra-sql-agent/internal/agent"
+	"ra-sql-agent/internal/schema"
 )
 
 func main() {
-	// 1. Load data
-	allSchemas, err := schema.LoadMetadata("./data/tables.json") 
+	// 1. Load Data
+	allSchemas, err := schema.LoadMetadata("./data/tables.json")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to load tables: %v", err)
 	}
 
 	questions, err := schema.LoadQuestions("./data/train_spider.json")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to load questions: %v", err)
 	}
 
-	// Pick the first question as a test
+	// 2. Select a test case (The "Department Management" example)
 	testQ := questions[0]
-	fmt.Printf("Question : %s\n", testQ.Question)
-	fmt.Printf("Target DB: %s\n", testQ.DBID)
-
-	// 2. Load the specific schema context
 	dbSchema := schema.GetSchemaForDB(testQ.DBID, allSchemas)
 
-	if dbSchema != nil {
-		fmt.Println("\nAGENT CONTEXT (What the AI sees):")
-		for i, tableName := range dbSchema.TableNamesOriginal {
-			fmt.Printf("Table [%s] has columns: \n", tableName)
-			for _, col := range dbSchema.ColumnNamesOriginal {
-				if int(col[0].(float64)) == i {
-					fmt.Printf("  - %s\n", col[1])
-				}
+	if dbSchema == nil {
+		log.Fatal("DB Schema not found")
+	}
+
+	// 3. Build the Schema Context string for the AI
+	var sb strings.Builder
+	for i, tableName := range dbSchema.TableNamesOriginal {
+		sb.WriteString(fmt.Sprintf("Table %s(", tableName) )
+		cols := []string{}
+		for _, col := range dbSchema.ColumnNamesOriginal {
+			// Column format in Spider: [table_index, "column_name"]
+			if int(col[0].(float64)) == i {
+				cols = append(cols, col[1].(string))
 			}
 		}
+		sb.WriteString(strings.Join(cols, ", ") + "); ")
+	}
+	schemaContext := sb.String()
+
+	fmt.Println("🚀 --- STARTING AI AGENT ---")
+	fmt.Printf("Question: %s\n", testQ.Question)
+	fmt.Printf("Context:  %s\n", schemaContext)
+
+	// 4. Call the Python AI Server
+	fmt.Println("\n🤖 AI is generating Relational Algebra...")
+	prediction, err := agent.PredictRA(testQ.Question, schemaContext)
+	if err != nil {
+		fmt.Printf("❌ AI Error: %v\n", err)
+		fmt.Println("Check: Is python/server.py running on port 8000?")
+		return
 	}
 
-	// 3. The "Gold" Answer
-	fmt.Printf("\n🎯 GOLD SQL: %s\n", testQ.SQL)
-
-	// 4. Test the Algebra Package
-	// This creates a nested RA tree: Aggregate -> Selection -> Relation
-	expr := algebra.RAExpression{
-		Type:    algebra.Aggregate,
-		Columns: []string{"COUNT(*)"},
-		Input: &algebra.RAExpression{
-			Type:      algebra.Selection,
-			Condition: "age > 56",
-			Input:     &algebra.RAExpression{Type: algebra.Relation, Table: "head"},
-		},
-	}
-
-	fmt.Println("\n📐 RA Representation:", expr.String())
+	// 5. Display Results
+	fmt.Println("\n------------------------------------")
+	fmt.Printf("🎯 GOLD SQL:  %s\n", testQ.SQL)
+	fmt.Printf("📐 AI OUTPUT: %s\n", prediction)
+	fmt.Println("------------------------------------")
 }

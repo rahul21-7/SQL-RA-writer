@@ -1,3 +1,5 @@
 venv/
 data/
 unsloth_compiled_cache/
+final_model_merged/
+outputs/
