@@ -19,7 +19,6 @@ func PredictRA(question string, dbID string) (string, error) {
 		return "", fmt.Errorf("failed to connect to local AI server: %v", err)
 	}
 
-	// This template MUST match your train_ra.json "instruction" and "input" keys
 	promptTemplate := `Below is an instruction that describes a task. Write a response that appropriately completes the request.
 
 ### Instruction:
@@ -29,7 +28,8 @@ Convert the SQL query to Relational Algebra.
 Question: %s
 Database: %s
 
-### Response (RA):`
+### Response:
+`
 
 	fullPrompt := fmt.Sprintf(promptTemplate, question, dbID)
 

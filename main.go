@@ -1,24 +1,25 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 
+	"ra-sql-agent/internal/agent"
 	"ra-sql-agent/internal/algebra"
+	"ra-sql-agent/internal/db"
 	"ra-sql-agent/internal/schema"
 
-	_ "github.com/glebarez/go-sqlite" // NO CGO REQUIRED
+	_ "github.com/glebarez/go-sqlite" // Registers driver for internal/db
 )
 
 func main() {
-	// 1. Load Data
 	// 1. Load Data
 	allSchemas, err := schema.LoadMetadata("./data/tables.json")
 	if err != nil {
 		log.Fatalf("Error loading metadata: %v", err)
 	}
-	fmt.Printf("📂 Loaded %d database schemas\n", len(allSchemas)) // Now it's used!
+	fmt.Printf("📂 Loaded %d database schemas\n", len(allSchemas))
 
 	questions, err := schema.LoadQuestions("./data/train_spider.json")
 	if err != nil {
@@ -27,43 +28,45 @@ func main() {
 
 	// 2. Setup Test Case
 	testQ := questions[0]
-	fmt.Printf("🚀 STARTING AGENT\nQuestion: %s\nTarget DB: %s\n", testQ.Question, testQ.DBID)
+	fmt.Printf("\n🚀 STARTING AGENT\nQuestion: %s\nTarget DB: %s\n", testQ.Question, testQ.DBID)
 
-	// 3. MOCK RA (The goal for your next fine-tuning)
-	mockRA := &algebra.RAExpression{
-		Type:    algebra.Aggregate,
-		Columns: []string{"COUNT(*)"},
-		Input: &algebra.RAExpression{
-			Type:      algebra.Selection,
-			Condition: "age > 56",
-			Input:     &algebra.RAExpression{Type: algebra.Relation, Table: "head"},
-		},
-	}
-
-	// 4. Translate to SQL using your new translator
-	generatedSQL := mockRA.ToSQL()
-	fmt.Printf("\n🛠️ Generated SQL: %s\n", generatedSQL)
-
-	// 5. Connect to Database (Pure Go Driver)
-	dbPath := fmt.Sprintf("./data/database/%s/%s.sqlite", testQ.DBID, testQ.DBID)
-
-	// Use "sqlite" here, NOT "sqlite3"
-	db, err := sql.Open("sqlite", dbPath)
+	// 3. Get AI Response
+	fmt.Println("\nCalling LLM...")
+	RAString, err := agent.PredictRA(testQ.Question, testQ.DBID)
 	if err != nil {
-		log.Fatalf("Failed to connect to DB: %v", err)
+		log.Fatalf("AI error: %v", err)
 	}
-	defer db.Close()
+
+	RAString = strings.TrimSpace(RAString)
+	fmt.Printf("AI Predicted RA: %s\n", RAString)
+
+	// 4. PARSE & TRANSLATE
+	// This uses the algebra.ParseRA function to build the expression tree
+	parsedRA := algebra.ParseRA(RAString)
+
+	// Use methods on the parsed object
+	raDisplay := parsedRA.String()
+	generatedSQL := parsedRA.ToSQL()
+
+	fmt.Println("\n📐 RELATIONAL ALGEBRA (AI LOGIC):")
+	fmt.Printf("   %s\n", raDisplay)
+
+	fmt.Println("\n🛠️ GENERATED SQL (DATABASE CODE):")
+	fmt.Printf("   %s\n", generatedSQL)
+
+	// 5. Build Database Path
+	dbPath := fmt.Sprintf("./data/database/%s/%s.sqlite", testQ.DBID, testQ.DBID)
 
 	// 6. Execute and Print Results
 	fmt.Println("💾 Querying Database...")
-	var count int
-	err = db.QueryRow(generatedSQL).Scan(&count)
+	
+	// ExecuteAndPrint handles the connection and prints the table automatically
+	err = db.ExecuteAndPrint(dbPath, generatedSQL)
 	if err != nil {
-		log.Fatalf("SQL Execution Error: %v\nCheck: Does the file exist at %s?", err, dbPath)
+		log.Fatalf("SQL Execution Error: %v", err)
 	}
 
 	fmt.Println("\n------------------------------------")
-	fmt.Printf("✅ DATABASE RESULT: %d\n", count)
 	fmt.Printf("🎯 GOLD SQL WAS:   %s\n", testQ.SQL)
 	fmt.Println("------------------------------------")
 }

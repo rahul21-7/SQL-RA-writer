@@ -25,7 +25,7 @@ if platform.system() == "Windows":
     torch.compile = no_compile
 
 # =========================================================
-# 🦥 LOAD MODEL (Optimized for 6GB VRAM)
+# 🦥 LOAD MODEL
 # =========================================================
 model, tokenizer = FastLanguageModel.from_pretrained(
     model_name = "unsloth/Llama-3.2-1B-bnb-4bit",
@@ -46,7 +46,7 @@ model = FastLanguageModel.get_peft_model(
 )
 
 # =========================================================
-# 📊 DATASET & PROMPT SETUP
+# 📊 DATASET & PROMPT SETUP (Aligned with Go Agent)
 # =========================================================
 alpaca_prompt = """Below is an instruction that describes a task. Write a response that appropriately completes the request.
 
@@ -59,77 +59,54 @@ alpaca_prompt = """Below is an instruction that describes a task. Write a respon
 ### Response:
 {}"""
 
-# Formatting function for the trainer
 def formatting_prompts_func(examples):
     instructions = examples["instruction"]
     inputs       = examples["input"]
     outputs      = examples["output"]
     texts = []
     for instruction, input, output in zip(instructions, inputs, outputs):
+        # The input field already contains "Question: ... \nDatabase: ..."
         text = alpaca_prompt.format(instruction, input, output) + tokenizer.eos_token
         texts.append(text)
-    return texts # Returns a list of strings
+    return texts
 
-import torch
-from unsloth import FastLanguageModel
-from datasets import load_dataset
-from trl import SFTTrainer
-from transformers import TrainingArguments, EarlyStoppingCallback
-
-# ... [Keep your existing Model Loading and Formatting function code] ...
+# Load your prepared RA dataset
+dataset = load_dataset("json", data_files="data/train_ra.json", split="train")
 
 # =========================================================
-# 📊 DATASET SPLIT (The "Cross-Validation" substitute)
-# =========================================================
-raw_dataset = load_dataset("json", data_files="data/train_ra.json", split="train")
-
-# Split: 90% for training, 10% for validation
-dataset_split = raw_dataset.train_test_split(test_size=0.1, seed=3407)
-train_dataset = dataset_split["train"]
-eval_dataset  = dataset_split["test"]
-
-# =========================================================
-# 🚀 TRAINER WITH EARLY STOPPING
+# 🚀 TRAINER (Fixed Logging Error)
 # =========================================================
 trainer = SFTTrainer(
     model = model,
-    processing_class = tokenizer,
-    train_dataset = train_dataset,
-    eval_dataset = eval_dataset,      # Give the model the test set
+    tokenizer = tokenizer,
+    train_dataset = dataset,
     formatting_func = formatting_prompts_func,
     max_seq_length = 2048,
-    
-    # ADD THE CALLBACK HERE
-    callbacks = [EarlyStoppingCallback(early_stopping_patience=3)],
-    
     args = TrainingArguments(
         per_device_train_batch_size = 2,
         gradient_accumulation_steps = 4,
         warmup_steps = 5,
-        max_steps = 150,              # Increased so Early Stopping has room to work
-        learning_rate = 5e-5,         # Gentler learning rate
-        bf16 = True,
-        logging_steps = 5,
-        
-        # Evaluation Strategy
-        eval_strategy = "steps",      # Evaluate every X steps
-        eval_steps = 10,              # Check the test set every 10 steps
+        max_steps = 300,
+        learning_rate = 2e-4,
+        fp16 = not torch.cuda.is_bf16_supported(),
+        bf16 = torch.cuda.is_bf16_supported(),
+        logging_steps = 1,
+        # Set eval_strategy to "no" to prevent the Logging TypeError
+        eval_strategy = "no", 
         save_strategy = "steps",
-        save_steps = 10,
-        load_best_model_at_end = True, # Crucial: saves the version with lowest error
-        
+        save_steps = 50,
         optim = "adamw_8bit",
-        weight_decay = 0.1,           # Forces generalization
+        weight_decay = 0.01,
         output_dir = "outputs",
-        remove_unused_columns = False,
+        report_to = "none", # Stop external logging to improve stability
     ),
 )
 
-print("🚀 Starting Training with Validation...")
+# Replace the end of python/train.py with this:
+print("🚀 Starting Training...")
 trainer.train()
 
-# =========================================================
-# 💾 SAVE THE "BEST" VERSION
-# =========================================================
-model.save_pretrained_merged("final_model_merged", tokenizer, save_method = "merged_16bit")
-print("✅ Done! The most accurate version has been saved.")
+# Save as LoRA instead of Merged to avoid the disk/RAM crash
+model.save_pretrained("final_model_lora") 
+tokenizer.save_pretrained("final_model_lora")
+print("✅ Done! LoRA adapters saved in 'final_model_lora'.")

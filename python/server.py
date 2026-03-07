@@ -1,68 +1,51 @@
 import torch
-import os
+# 1. Mandatory Patch for Windows compatibility
+for i in range(1, 9):
+    attr = f"int{i}"
+    if not hasattr(torch, attr):
+        setattr(torch, attr, torch.int8)
+
 from flask import Flask, request, jsonify
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import PeftModel
 
 app = Flask(__name__)
 
-# Path to your merged model folder
-model_path = "final_model_merged"
+# Paths
+lora_path = "final_model_lora" 
+base_model = "unsloth/Llama-3.2-1B-bnb-4bit"
 
-print("🤖 Loading Tokenizer and Model...")
-
-# 1. Use AutoTokenizer to handle the Llama 3 BPE format correctly
-tokenizer = AutoTokenizer.from_pretrained(model_path)
-
-# 2. Use AutoModel for Causal LM
+print("🤖 Loading Base Model and Adapters...")
+tokenizer = AutoTokenizer.from_pretrained(lora_path)
 model = AutoModelForCausalLM.from_pretrained(
-    model_path,
-    torch_dtype=torch.float16,
+    base_model,
     device_map="auto",
-    low_cpu_mem_usage=True
+    dtype=torch.float16
 )
 
-@app.route('/v1/completions', methods=['POST'])
-# Change this line in python/server.py:
-@app.route('/v1/chat/completions', methods=['POST']) # Add /chat/ here
+# Attach your trained RA logic
+model = PeftModel.from_pretrained(model, lora_path)
+model.eval()
+
+@app.route('/v1/chat/completions', methods=['POST'])
 def completions():
     data = request.json
-    
-    # LangChainGo sends the prompt inside a "messages" list for Chat
-    # We need to extract the content from the last message
-    if "messages" in data:
-        prompt = data["messages"][-1]["content"]
-    else:
-        prompt = data.get("prompt", "")
+    prompt = data["messages"][-1]["content"] if "messages" in data else data.get("prompt", "")
     
     inputs = tokenizer(prompt, return_tensors="pt").to("cuda")
-    
     with torch.no_grad():
-        outputs = model.generate(
-            **inputs, 
-            max_new_tokens=128, 
-            temperature=0.1,
-            repetition_penalty=1.5
-        )
+        outputs = model.generate(**inputs, max_new_tokens=128, temperature=0.1)
     
     decoded = tokenizer.decode(outputs[0], skip_special_tokens=True)
     
+    # Extraction logic for uniformity with train.py
     try:
-        ra_result = decoded.split("### Response (RA):")[-1].strip()
+        ra_result = decoded.split("### Response:")[-1].strip()
     except:
         ra_result = decoded.strip()
 
-    # Return in Chat Completion format
-    return jsonify({
-        "choices": [{
-            "message": {
-                "role": "assistant",
-                "content": ra_result
-            },
-            "text": ra_result # Keep this for backward compatibility
-        }]
-    })
+    return jsonify({"choices": [{"message": {"role": "assistant", "content": ra_result}}]})
 
 if __name__ == '__main__':
     print("🚀 RA AI Server online at http://localhost:8000")
-    # threaded=False helps avoid CUDA memory fragmentation on laptop GPUs
     app.run(host='0.0.0.0', port=8000, threaded=False)
