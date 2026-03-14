@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"ra-sql-agent/internal/agent"
@@ -10,11 +11,11 @@ import (
 	"ra-sql-agent/internal/db"
 	"ra-sql-agent/internal/schema"
 
-	_ "github.com/glebarez/go-sqlite" // Registers driver for internal/db
+	_ "github.com/glebarez/go-sqlite"
 )
 
 func main() {
-	// 1. Load Data
+	// 1. Load metadata
 	allSchemas, err := schema.LoadMetadata("./data/tables.json")
 	if err != nil {
 		log.Fatalf("Error loading metadata: %v", err)
@@ -26,13 +27,17 @@ func main() {
 		log.Fatalf("Error loading questions: %v", err)
 	}
 
-	// 2. Setup Test Case
+	// 2. Pick the test question (index 0 by default)
 	testQ := questions[0]
 	fmt.Printf("\n🚀 STARTING AGENT\nQuestion: %s\nTarget DB: %s\n", testQ.Question, testQ.DBID)
 
-	// 3. Get AI Response
-	fmt.Println("\nCalling LLM...")
-	RAString, err := agent.PredictRA(testQ.Question, testQ.DBID)
+	// 3. Build the schema info string for the LLM prompt
+	dbSchema := schema.GetSchemaForDB(testQ.DBID, allSchemas)
+	schemaInfo := schema.FormatSchema(dbSchema)
+
+	// 4. Call the LLM
+	fmt.Println("\n🤖 Calling LLM...")
+	RAString, err := agent.PredictRA(testQ.Question, testQ.DBID, schemaInfo)
 	if err != nil {
 		log.Fatalf("AI error: %v", err)
 	}
@@ -40,33 +45,36 @@ func main() {
 	RAString = strings.TrimSpace(RAString)
 	fmt.Printf("AI Predicted RA: %s\n", RAString)
 
-	// 4. PARSE & TRANSLATE
-	// This uses the algebra.ParseRA function to build the expression tree
+	// 5. Parse & translate RA → SQL
 	parsedRA := algebra.ParseRA(RAString)
-
-	// Use methods on the parsed object
 	raDisplay := parsedRA.String()
 	generatedSQL := parsedRA.ToSQL()
 
 	fmt.Println("\n📐 RELATIONAL ALGEBRA (AI LOGIC):")
 	fmt.Printf("   %s\n", raDisplay)
 
-	fmt.Println("\n🛠️ GENERATED SQL (DATABASE CODE):")
+	fmt.Println("\n🛠️  GENERATED SQL (DATABASE CODE):")
 	fmt.Printf("   %s\n", generatedSQL)
 
-	// 5. Build Database Path
-	dbPath := fmt.Sprintf("./data/database/%s/%s.sqlite", testQ.DBID, testQ.DBID)
+	// 6. Determine database path.
+	//    To connect to a real database, set the DB_DRIVER and DB_DSN env vars:
+	//      Postgres: export DB_DRIVER=postgres DB_DSN="host=... user=... password=... dbname=... sslmode=disable"
+	//      MySQL:    export DB_DRIVER=mysql    DB_DSN="user:pass@tcp(host:3306)/dbname"
+	//    When those vars are set, sqlitePath is ignored.
+	sqlitePath := os.Getenv("SQLITE_PATH")
+	if sqlitePath == "" {
+		sqlitePath = fmt.Sprintf("./data/database/%s/%s.sqlite", testQ.DBID, testQ.DBID)
+	}
 
-	// 6. Execute and Print Results
-	fmt.Println("💾 Querying Database...")
-	
-	// ExecuteAndPrint handles the connection and prints the table automatically
-	err = db.ExecuteAndPrint(dbPath, generatedSQL)
+	// 7. Execute and print results
+	fmt.Println("\n💾 Querying Database...")
+	err = db.ExecuteAndPrint(sqlitePath, generatedSQL)
 	if err != nil {
-		log.Fatalf("SQL Execution Error: %v", err)
+		log.Fatalf("SQL Execution Error: %v\n\nMake sure the database file exists at: %s\n"+
+			"Or set DB_DRIVER + DB_DSN environment variables to use a real database.", err, sqlitePath)
 	}
 
 	fmt.Println("\n------------------------------------")
-	fmt.Printf("🎯 GOLD SQL WAS:   %s\n", testQ.SQL)
+	fmt.Printf("🎯 GOLD SQL WAS: %s\n", testQ.SQL)
 	fmt.Println("------------------------------------")
 }

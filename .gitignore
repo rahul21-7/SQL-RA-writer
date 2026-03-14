@@ -1,5 +1,8 @@
 venv/
 data/
 unsloth_compiled_cache/
+final_model_lora/
 final_model_merged/
 outputs/
+
+config.json
