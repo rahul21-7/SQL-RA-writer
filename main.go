@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
 	"strings"
 
 	"ra-sql-agent/internal/agent"
@@ -15,7 +14,7 @@ import (
 )
 
 func main() {
-	// 1. Load metadata
+	// 1. Load Spider metadata (used for schema info passed to the LLM)
 	allSchemas, err := schema.LoadMetadata("./data/tables.json")
 	if err != nil {
 		log.Fatalf("Error loading metadata: %v", err)
@@ -27,11 +26,11 @@ func main() {
 		log.Fatalf("Error loading questions: %v", err)
 	}
 
-	// 2. Pick the test question (index 0 by default)
+	// 2. Pick the test question
 	testQ := questions[0]
 	fmt.Printf("\n🚀 STARTING AGENT\nQuestion: %s\nTarget DB: %s\n", testQ.Question, testQ.DBID)
 
-	// 3. Build the schema info string for the LLM prompt
+	// 3. Build schema info string for the LLM prompt
 	dbSchema := schema.GetSchemaForDB(testQ.DBID, allSchemas)
 	schemaInfo := schema.FormatSchema(dbSchema)
 
@@ -45,7 +44,7 @@ func main() {
 	RAString = strings.TrimSpace(RAString)
 	fmt.Printf("AI Predicted RA: %s\n", RAString)
 
-	// 5. Parse & translate RA → SQL
+	// 5. Parse RA → SQL
 	parsedRA := algebra.ParseRA(RAString)
 	raDisplay := parsedRA.String()
 	generatedSQL := parsedRA.ToSQL()
@@ -56,22 +55,15 @@ func main() {
 	fmt.Println("\n🛠️  GENERATED SQL (DATABASE CODE):")
 	fmt.Printf("   %s\n", generatedSQL)
 
-	// 6. Determine database path.
-	//    To connect to a real database, set the DB_DRIVER and DB_DSN env vars:
-	//      Postgres: export DB_DRIVER=postgres DB_DSN="host=... user=... password=... dbname=... sslmode=disable"
-	//      MySQL:    export DB_DRIVER=mysql    DB_DSN="user:pass@tcp(host:3306)/dbname"
-	//    When those vars are set, sqlitePath is ignored.
-	sqlitePath := os.Getenv("SQLITE_PATH")
-	if sqlitePath == "" {
-		sqlitePath = fmt.Sprintf("./data/database/%s/%s.sqlite", testQ.DBID, testQ.DBID)
-	}
+	// 6. Execute against the configured database.
+	//    If config.json is present, it takes priority.
+	//    Otherwise falls back to the Spider SQLite file.
+	sqlitePath := fmt.Sprintf("./data/database/%s/%s.sqlite", testQ.DBID, testQ.DBID)
 
-	// 7. Execute and print results
 	fmt.Println("\n💾 Querying Database...")
 	err = db.ExecuteAndPrint(sqlitePath, generatedSQL)
 	if err != nil {
-		log.Fatalf("SQL Execution Error: %v\n\nMake sure the database file exists at: %s\n"+
-			"Or set DB_DRIVER + DB_DSN environment variables to use a real database.", err, sqlitePath)
+		log.Fatalf("SQL Execution Error: %v", err)
 	}
 
 	fmt.Println("\n------------------------------------")
