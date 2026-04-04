@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The SQL Forge | RA-SQL Agent</title>
+    <link rel="stylesheet" href="css/forge.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.9.1/gsap.min.js"></script>
+</head>
+<body class="dark-mode">
+    <div id="canvas-container"></div>
+    
+    <!-- HERO SECTION -->
+    <section id="hero-section">
+        <div class="hero-content">
+            <h2 class="hero-subtitle">REWRITE THE DATASTREAM</h2>
+            <h1 class="hero-title">THE SQL <span class="accent">FORGE</span></h1>
+            <p class="hero-description">The ultimate interface for forging natural language into powerful relational logic.</p>
+            <div class="hero-actions">
+                <button id="enter-forge" class="primary-btn big">
+                    <span>ACCESS THE FORGE</span>
+                    <div class="btn-glow"></div>
+                </button>
+            </div>
+        </div>
+        <div class="scroll-hint">SCROLL TO DISCOVER</div>
+    </section>
+
+    <!-- APP CONTAINER (Initially hidden/translated) -->
+    <main class="app-container" id="main-app">
+        <header class="forge-header glass">
+            <div class="logo-area">
+                <span class="forge-icon">⚡</span>
+                <h1 class="nav-title">THE SQL <span class="accent">FORGE</span></h1>
+            </div>
+            <div class="model-selector">
+                <div class="model-option active" data-model="unsloth/Qwen2.5-Coder-1.5B-bnb-4bit">
+                    <span class="model-name">Qwen 2.5</span>
+                    <span class="model-tag">Expert</span>
+                </div>
+                <div class="model-option" data-model="unsloth/Llama-3.2-1B-bnb-4bit">
+                    <span class="model-name">Llama 3.2</span>
+                    <span class="model-tag">Base</span>
+                </div>
+            </div>
+            <div class="stats-overview">
+                <div class="stat-item">
+                    <span class="stat-label">ACCURACY</span>
+                    <span class="stat-value" id="accuracy-val">--%</span>
+                </div>
+            </div>
+        </header>
+
+        <section class="forge-content">
+            <div class="input-panel glass">
+                <div class="panel-header">
+                    <h3>NATURAL LANGUAGE INPUT</h3>
+                    <span class="status-dot"></span>
+                </div>
+                <textarea id="question-input" placeholder="e.g., Show me the names of all employees who joined in 2023..."></textarea>
+                <div class="input-actions">
+                    <button id="forge-btn" class="primary-btn">
+                        <span>TRANSMUTE QUERY</span>
+                        <div class="btn-glow"></div>
+                    </button>
+                    <button id="seed-btn" class="secondary-btn" title="Populate with sample data">SEED SAMPLE DB</button>
+                </div>
+            </div>
+
+            <div class="schema-panel glass">
+                <div class="panel-header">
+                    <h3>LIVE SCHEMA</h3>
+                    <span id="schema-status" class="meta">Scanning...</span>
+                </div>
+                <div id="schema-list" class="jetbrains">
+                    No tables detected.
+                </div>
+            </div>
+
+            <div class="benchmarks-panel glass">
+                <div class="panel-header">
+                    <h3>MODEL BENCHMARKS</h3>
+                    <span class="meta">SPIDER DATASET (N=100)</span>
+                </div>
+                <div id="benchmark-table" class="jetbrains">
+                    Loading comparison data...
+                </div>
+            </div>
+
+            <div class="output-grid">
+                <div class="output-panel glass" id="ra-panel">
+                    <div class="panel-header">
+                        <h3>RELATIONAL ALGEBRA</h3>
+                    </div>
+                    <div class="code-container">
+                        <pre id="ra-output" class="jetbrains">Waiting for input...</pre>
+                    </div>
+                </div>
+
+                <div class="output-panel glass" id="sql-panel">
+                    <div class="panel-header">
+                        <h3>GENERATED SQL</h3>
+                        <div class="sql-action-bar">
+                            <button id="execute-btn" class="secondary-btn plasma-btn" disabled>EXECUTE ON PGSQL</button>
+                            <button id="copy-sql" class="icon-btn" title="Copy SQL">📋</button>
+                        </div>
+                    </div>
+                    <div class="code-container">
+                        <pre id="sql-output" class="jetbrains">Waiting for input...</pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="results-panel glass">
+                <div class="panel-header">
+                    <h3>EXECUTION RESULTS</h3>
+                    <div class="header-right">
+                        <div id="feedback-controls" class="feedback-widget hidden">
+                            <span>Was this correct?</span>
+                            <button class="fb-btn" data-rating="2" title="Correct">✅</button>
+                            <button class="fb-btn" data-rating="1" title="Partial">🟡</button>
+                            <button class="fb-btn" data-rating="0" title="Wrong">❌</button>
+                        </div>
+                        <span id="row-count" class="meta">0 rows</span>
+                    </div>
+                </div>
+                <div class="table-scroll">
+                    <table id="results-table">
+                        <thead>
+                            <tr id="table-head">
+                                <th>Result mapping will appear here</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body">
+                            <tr>
+                                <td>No data executed yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div id="loader" class="hidden">
+        <div class="plasma-ball"></div>
+        <p>FORGING RELATIONS...</p>
+    </div>
+
+    <script src="js/forge.js"></script>
+</body>
+</html>

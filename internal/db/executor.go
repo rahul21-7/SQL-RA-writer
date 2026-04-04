@@ -128,6 +128,9 @@ func discoverPostgres(conn *sql.DB) (string, error) {
 		colRows.Close()
 		sb.WriteString(fmt.Sprintf("Table %s: (%s)\n", table, strings.Join(cols, ", ")))
 	}
+	if sb.Len() == 0 {
+		return "No tables found in public schema. Please seed the database first.", nil
+	}
 	return sb.String(), nil
 }
 

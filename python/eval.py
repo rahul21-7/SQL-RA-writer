@@ -219,19 +219,19 @@ class Metrics:
 
 def print_metrics(m):
     s = m.summary()
-    print(f"\n{'─'*50}")
+    print(f"\n{'-'*50}")
     print(f"  Model         : {s['model']}")
     print(f"  Questions     : {s['total']}")
     print(f"  Exact match   : {s['exact_match']} / {s['total']}  ({s['exact_match_pct']}%)")
     print(f"  SQL executed  : {s['exec_accuracy']}%  (ran without error)")
     print(f"  SQL generated : {s['parse_rate']}%  (RA parsed to valid SQL)")
     print(f"  RA valid      : {s['ra_valid_rate']}%  (output had RA operators)")
-    print(f"{'─'*50}")
+    print(f"{'-'*50}")
 
 # ─── Main evaluation loop ─────────────────────────────────────────────────────
 def evaluate(model_name, questions, schemas, n):
     metrics = Metrics(model_name)
-    print(f"\n🔍 Evaluating {model_name} on {n} questions...")
+    print(f"\nEvaluating {model_name} on {n} questions...")
     print("  [Progress: . = correct  x = wrong  ! = SQL error  ? = parse fail]\n  ", end="", flush=True)
 
     for i, entry in enumerate(questions[:n]):
@@ -270,7 +270,7 @@ def evaluate(model_name, questions, schemas, n):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--n",       type=int, default=200,   help="Number of questions to evaluate")
-    parser.add_argument("--compare", type=str, default=None,  help="Compare against: sqlcoder, baseline")
+    parser.add_argument("--compare", type=str, default=None,  help="Compare against: sqlcoder JSON results file, or use baseline")
     parser.add_argument("--out",     type=str, default=None,  help="Save results to JSON file")
     args = parser.parse_args()
 
@@ -286,55 +286,70 @@ def main():
     print_metrics(your_metrics)
 
     # Compare against a baseline if requested
+    bs = None
     if args.compare:
-        print(f"\n⚠️  Baseline comparison mode: '{args.compare}'")
-        print("   This calls the same server — swap the model in server.py to compare.")
-        print("   Start server.py with a different model, then re-run with --compare.")
-        print("   Example baseline: a model that just returns 'SELECT * FROM <table>'")
+        print(f"\nComparison mode against: '{args.compare}'")
+        
+        if os.path.exists(args.compare):
+            print(f"Loading previous results from {args.compare}...")
+            try:
+                with open(args.compare, "r", encoding="utf-8") as f:
+                    prev_results = json.load(f)
+                if "your_model" in prev_results:
+                    bs = prev_results["your_model"]
+                    print(f"Loaded metrics for model: {bs.get('model', 'Unknown')}")
+            except Exception as e:
+                print(f"Failed to load baseline JSON: {e}")
 
-        # Simple heuristic baseline for comparison: always select * from first table
-        baseline = Metrics("Baseline (SELECT * heuristic)")
-        for entry in questions[:n]:
-            db_id    = entry["db_id"]
-            gold_sql = entry["query"]
-            # Naive: guess SELECT * from first table in gold SQL
-            tables = re.findall(r'\bFROM\s+(\w+)', gold_sql, re.IGNORECASE)
-            naive_sql = f"SELECT * FROM {tables[0]}" if tables else None
-            result     = execute_sql(db_id, naive_sql)
-            gold_result = execute_sql(db_id, gold_sql)
-            baseline.record("", naive_sql, result, gold_result)
+        if not bs:
+            print("   This calls the same server — swap the model in server.py to compare.")
+            print("   Start server.py with a different model, then re-run with --compare.")
+            print("   Example baseline: a model that just returns 'SELECT * FROM <table>'")
 
-        print_metrics(baseline)
+            # Simple heuristic baseline for comparison: always select * from first table
+            baseline = Metrics("Baseline (SELECT * heuristic)")
+            for entry in questions[:n]:
+                db_id    = entry["db_id"]
+                gold_sql = entry["query"]
+                # Naive: guess SELECT * from first table in gold SQL
+                tables = re.findall(r'\bFROM\s+(\w+)', gold_sql, re.IGNORECASE)
+                naive_sql = f"SELECT * FROM {tables[0]}" if tables else None
+                result     = execute_sql(db_id, naive_sql)
+                gold_result = execute_sql(db_id, gold_sql)
+                baseline.record("", naive_sql, result, gold_result)
+
+            print_metrics(baseline)
+            bs = baseline.summary()
 
         # Side-by-side comparison
         ys = your_metrics.summary()
-        bs = baseline.summary()
-        print(f"\n{'─'*50}")
-        print(f"  {'Metric':<25} {'Your Model':>12} {'Baseline':>12}")
-        print(f"  {'─'*49}")
+        baseline_name = bs.get('model', 'Baseline')[:12]
+        print(f"\n{'-'*50}")
+        print(f"  {'Metric':<25} {'Your Model':>12} {baseline_name:>12}")
+        print(f"  {'-'*49}")
         for key, label in [
             ("exact_match_pct", "Exact match %"),
             ("exec_accuracy",   "SQL execution %"),
             ("parse_rate",      "SQL parse rate %"),
             ("ra_valid_rate",   "RA valid rate %"),
         ]:
-            y = ys[key]
-            b = bs[key]
+            y = ys.get(key, 0)
+            b = bs.get(key, 0)
             diff = y - b
-            arrow = "▲" if diff > 0 else ("▼" if diff < 0 else "=")
+            arrow = "+" if diff > 0 else ("-" if diff < 0 else "=")
             print(f"  {label:<25} {y:>11}%  {b:>11}%  {arrow} {abs(diff):.1f}%")
-        print(f"{'─'*50}")
+        print(f"{'-'*50}")
 
     # Save results
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_path = args.out or f"eval_results_{timestamp}.json"
     with open(out_path, "w", encoding="utf-8") as f:
         results = {"your_model": your_metrics.summary()}
-        if args.compare:
-            results["baseline"] = baseline.summary()
+        if bs:
+            results["baseline"] = bs
         json.dump(results, f, indent=2)
-    print(f"\n💾 Results saved to {out_path}")
-    print(f"\n📊 Quick summary: {your_metrics.exact_match}/{n} exact matches "
+    print(f"\nResults saved to {out_path}")
+    print(f"\nSummary: {your_metrics.exact_match}/{n} exact matches "
           f"({your_metrics.summary()['exact_match_pct']}% accuracy)")
 
 if __name__ == "__main__":

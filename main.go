@@ -13,6 +13,7 @@ import (
 	"ra-sql-agent/internal/algebra"
 	"ra-sql-agent/internal/db"
 	"ra-sql-agent/internal/schema"
+	"ra-sql-agent/internal/server"
 
 	_ "github.com/glebarez/go-sqlite"
 )
@@ -176,7 +177,7 @@ func runAgentMode(reader *bufio.Reader) {
 
 		// Call LLM
 		fmt.Println("\n  🤖 Thinking...")
-		RAString, err := agent.PredictRA(contextualQuestion, dbID, schemaInfo)
+		RAString, err := agent.PredictRA(contextualQuestion, dbID, schemaInfo, "local-model")
 		if err != nil {
 			fmt.Printf("  ⚠️  AI server error: %v\n", err)
 			fmt.Println("  Is python/server.py running?")
@@ -258,7 +259,7 @@ func runSpiderQuery(reader *bufio.Reader, allSchemas []schema.SpiderSchema) {
 	schemaInfo := schema.FormatSchema(dbSchema)
 
 	fmt.Println("\n  🤖 Thinking...")
-	RAString, err := agent.PredictRA(q.Question, q.DBID, schemaInfo)
+	RAString, err := agent.PredictRA(q.Question, q.DBID, schemaInfo, "local-model")
 	if err != nil {
 		fmt.Printf("  ⚠️  AI error: %v\n", err)
 		return
@@ -295,6 +296,7 @@ func main() {
 	fmt.Println("  Commands:")
 	fmt.Println("    agent   — connect to your database (config.json)")
 	fmt.Println("    spider  — test with a Spider dataset question")
+	fmt.Println("    web     — start 'The SQL Forge' web interface")
 	fmt.Println("    list    — list Spider databases")
 	fmt.Println("    stats   — feedback log summary")
 	fmt.Println("    quit    — exit")
@@ -311,6 +313,9 @@ func main() {
 
 		case "spider":
 			runSpiderQuery(reader, allSchemas)
+
+		case "web":
+			server.Start(8080)
 
 		case "list":
 			fmt.Printf("\n  %d Spider databases:\n", len(allSchemas))
