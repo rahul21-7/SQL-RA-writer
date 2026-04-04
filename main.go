@@ -283,6 +283,16 @@ func runSpiderQuery(reader *bufio.Reader, allSchemas []schema.SpiderSchema) {
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 func main() {
+	// Check for command line arguments first to support automation (e.g. from launch_forge.bat)
+	if len(os.Args) > 1 {
+		cmd := strings.TrimSpace(strings.ToLower(os.Args[1]))
+		switch cmd {
+		case "web":
+			server.Start(8080)
+			return
+		}
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 
 	// Load Spider metadata (used in spider mode and list command)

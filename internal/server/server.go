@@ -6,9 +6,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"ra-sql-agent/internal/agent"
 	"ra-sql-agent/internal/algebra"
 	"ra-sql-agent/internal/db"
+	"runtime"
 	"time"
 )
 
@@ -59,7 +61,31 @@ func Start(port int) {
 	mux.HandleFunc("GET /api/benchmarks", handleBenchmarks)
 
 	fmt.Printf("🚀 The SQL Forge is heating up at http://localhost:%d\n", port)
+	
+	// Automatically open the browser
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		openBrowser(fmt.Sprintf("http://localhost:%d", port))
+	}()
+
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), mux))
+}
+
+func openBrowser(url string) {
+	var err error
+	switch runtime.GOOS {
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		err = fmt.Errorf("unsupported platform")
+	}
+	if err != nil {
+		log.Printf("  ⚠️  Could not open browser: %v", err)
+	}
 }
 
 func handleQuery(w http.ResponseWriter, r *http.Request) {
