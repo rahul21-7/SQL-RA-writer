@@ -26,12 +26,11 @@ type completionResponse struct {
 }
 
 // PredictRA calls the local LLM server and returns a Relational Algebra string.
-// It uses the raw /v1/completions endpoint directly to avoid langchaingo
-// silently routing to /v1/chat/completions.
-func PredictRA(question string, dbID string, schemaInfo string) (string, error) {
+func PredictRA(question string, dbID string, schemaInfo string, model string) (string, error) {
 	// EXACT MATCH to prompt_style in train.py — newlines and headers must be identical.
 	promptTemplate := `### Instruction:
-Convert the SQL query to Relational Algebra.
+Convert the natural language question to Relational Algebra.
+IMPORTANT: ONLY use tables and columns listed in the Schema below. If no schema is available, do not hallucinate tables; instead, explain that the database is empty.
 
 ### Input:
 Question: %s
@@ -44,7 +43,7 @@ RA: `
 	fullPrompt := fmt.Sprintf(promptTemplate, question, dbID, schemaInfo)
 
 	reqBody := completionRequest{
-		Model:       "local-model", // server ignores this but the field is required
+		Model:       model,
 		Prompt:      fullPrompt,
 		MaxTokens:   128,
 		Temperature: 0.0,

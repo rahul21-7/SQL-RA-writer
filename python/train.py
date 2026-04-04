@@ -21,8 +21,16 @@ if platform.system() == "Windows":
         if model is None: return lambda x: x
         return model
     torch.compile = no_compile
+# Configuration for Model Selection Defaults
+# Swap 'BASE_MODEL' below to test different architectures.
+# Options: 
+#  - "unsloth/Llama-3.2-1B-bnb-4bit" (Default baseline, very lightweight)
+#  - "unsloth/Qwen2.5-Coder-1.5B-bnb-4bit" (Recommended for coding/SQL tasks)
+#  - "defog/sqlcoder-7b-2" (Dedicated SQL model, needs more VRAM)
+BASE_MODEL = "unsloth/Qwen2.5-Coder-1.5B-bnb-4bit"
+
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = "unsloth/Llama-3.2-1B-bnb-4bit",
+    model_name = BASE_MODEL,
     max_seq_length = 640,
     load_in_4bit = True,
     device_map = "auto",

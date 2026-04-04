@@ -20,7 +20,7 @@ app = Flask(__name__)
 # ---------------------------------------------------------------------------
 MERGED_MODEL_PATH = os.environ.get("MERGED_MODEL_PATH", "final_model_merged")
 
-print(f"🤖 Loading model from '{MERGED_MODEL_PATH}' ...")
+print(f"Loading model from '{MERGED_MODEL_PATH}' ...")
 tokenizer = AutoTokenizer.from_pretrained(MERGED_MODEL_PATH)
 model = AutoModelForCausalLM.from_pretrained(
     MERGED_MODEL_PATH,
@@ -28,7 +28,7 @@ model = AutoModelForCausalLM.from_pretrained(
     torch_dtype=torch.float16,
 )
 model.eval()
-print("✅ Model loaded.")
+print("Model loaded.")
 
 
 def generate_ra(prompt: str) -> str:
@@ -88,5 +88,5 @@ def chat_completions():
 
 
 if __name__ == "__main__":
-    print("🚀 RA AI Server online at http://localhost:8000")
+    print("RA AI Server online at http://localhost:8000")
     app.run(host="0.0.0.0", port=8000, threaded=False)
