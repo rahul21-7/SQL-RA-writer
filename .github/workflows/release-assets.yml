@@ -1,0 +1,57 @@
+name: Release Assets Bundle
+
+on:
+  release:
+    types: [created]
+
+permissions:
+  contents: write
+
+jobs:
+  release-assets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23' # Matches the SLSA config
+
+      - name: Build Go Binary (Linux)
+        run: go build -o ra-sql-agent-linux .
+
+      - name: Build Go Binary (Windows)
+        run: GOOS=windows GOARCH=amd64 go build -o ra-sql-agent-windows.exe .
+
+      - name: Prepare Release Bundle (Windows)
+        run: |
+          mkdir -p release-windows/python
+          mkdir -p release-windows/static
+          cp ra-sql-agent-windows.exe release-windows/ra-sql-agent.exe
+          cp -r python/* release-windows/python/
+          cp -r static/* release-windows/static/
+          cp README.md release-windows/
+          cp requirements.txt release-windows/
+          zip -r ra-sql-agent-windows.zip release-windows/
+
+      - name: Prepare Release Bundle (Linux)
+        run: |
+          mkdir -p release-linux/python
+          mkdir -p release-linux/static
+          cp ra-sql-agent-linux release-linux/ra-sql-agent
+          cp -r python/* release-linux/python/
+          cp -r static/* release-linux/static/
+          cp README.md release-linux/
+          cp requirements.txt release-linux/
+          tar -czvf ra-sql-agent-linux.tar.gz release-linux/
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ra-sql-agent-windows.zip
+            ra-sql-agent-linux.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

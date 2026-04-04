@@ -1,0 +1,17 @@
+# .slsa-goreleaser.yml
+# See https://github.com/slsa-framework/slsa-github-generator/blob/main/internal/builders/go/README.md#configuration-file
+
+version: 1
+builds:
+  - id: ra-sql-agent
+    binary: ra-sql-agent
+    main: ./main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
