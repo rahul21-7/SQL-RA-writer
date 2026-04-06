@@ -170,11 +170,24 @@ header.forge-header {
     padding: 2rem;
 }
 
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.2rem;
+}
+
 .panel-header h3 {
     font-size: 0.8rem;
     letter-spacing: 2px;
     color: var(--accent);
     text-transform: uppercase;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
 }
 
 textarea {

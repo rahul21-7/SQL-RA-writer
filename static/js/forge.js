@@ -1,11 +1,9 @@
-// --- THE SQL FORGE v2.1.1 JS ---
 let scene, camera, renderer, particles, dataCore;
 const crystalGroup = new THREE.Group();
 
-// List of SQL keywords for orbiting
 const SQL_KEYWORDS = ["SELECT", "FROM", "WHERE", "JOIN", "GROUP BY", "ORDER BY", "COUNT", "SUM", "RA", "π", "σ", "γ", "⨝"];
 
-// --- THREE.JS INITIALIZATION ---
+// Initialization of the 3D Experience
 function initThree() {
     const container = document.getElementById('canvas-container');
     scene = new THREE.Scene();
@@ -15,7 +13,6 @@ function initThree() {
     renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(renderer.domElement);
 
-    // 1. DATA GRID (BACKGROUND)
     const gridGeometry = new THREE.BufferGeometry();
     const vertices = [];
     for (let x = -80; x < 80; x += 4) {
@@ -33,7 +30,6 @@ function initThree() {
     particles = new THREE.Points(gridGeometry, gridMaterial);
     scene.add(particles);
 
-    // 2. THE DATA CORE (3-Cylinder Stack)
     dataCore = new THREE.Group();
     const cylinderGeom = new THREE.CylinderGeometry(3.5, 3.5, 1.2, 32);
     const cylinderMat = new THREE.MeshPhongMaterial({
@@ -51,7 +47,6 @@ function initThree() {
         dataCore.add(c);
     }
 
-    // Orbiting SQL Keywords (using Sprites for simple text)
     SQL_KEYWORDS.forEach((word, index) => {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
@@ -70,7 +65,6 @@ function initThree() {
         sprite.position.set(Math.cos(angle) * radius, (Math.random() - 0.5) * 5, Math.sin(angle) * radius);
         sprite.scale.set(4, 1, 1);
         
-        // Custom property for orbit animation
         sprite.userData = { angle: angle, radius: radius, speed: 0.01 + Math.random() * 0.01 };
         crystalGroup.add(sprite);
     });
@@ -78,7 +72,6 @@ function initThree() {
     crystalGroup.add(dataCore);
     scene.add(crystalGroup);
 
-    // Lighting
     const pointLight = new THREE.PointLight(0x10b981, 2, 50);
     pointLight.position.set(0, 5, 5);
     scene.add(pointLight);
@@ -94,8 +87,6 @@ function animate() {
     requestAnimationFrame(animate);
     
     const time = Date.now() * 0.001;
-
-    // Animate background
     const positions = particles.geometry.attributes.position.array;
     for (let i = 0; i < positions.length; i += 3) {
         const x = positions[i];
@@ -104,10 +95,8 @@ function animate() {
     }
     particles.geometry.attributes.position.needsUpdate = true;
 
-    // Animate Core Group
     crystalGroup.rotation.y += 0.002;
     
-    // Animate Orbiting Keywords
     crystalGroup.children.forEach(child => {
         if (child.isSprite) {
             child.userData.angle += child.userData.speed;
@@ -117,15 +106,12 @@ function animate() {
         }
     });
 
-    // Pulse the database cylinders
     dataCore.children.forEach((c, idx) => {
         c.scale.setScalar(1 + Math.sin(time * 2 + idx) * 0.03);
     });
 
     renderer.render(scene, camera);
 }
-
-// --- INTERACTIONS & TRANSITIONS ---
 
 const enterForgeBtn = document.getElementById('enter-forge');
 const forgeBtn = document.getElementById('forge-btn');
@@ -135,16 +121,14 @@ const feedbackWidget = document.getElementById('feedback-controls');
 const accuracyVal = document.getElementById('accuracy-val');
 const raOutput = document.getElementById('ra-output');
 const sqlOutput = document.getElementById('sql-output');
-
 const seedBtn = document.getElementById('seed-btn');
 const schemaList = document.getElementById('schema-list');
 const schemaStatus = document.getElementById('schema-status');
 const benchmarkTable = document.getElementById('benchmark-table');
 
-let currentModel = "unsloth/Qwen2.5-Coder-1.5B-bnb-4bit";
+let currentModel = "standard";
 let lastGeneration = null;
 
-// Hero Transition
 enterForgeBtn.onclick = () => {
     document.body.classList.add('forge-active');
     gsap.to(camera.position, { z: 18, y: 12, duration: 1.5, ease: "power2.inOut" });
@@ -172,8 +156,8 @@ function renderBenchmarks(data) {
         <thead>
             <tr>
                 <th>Metric</th>
-                <th>Qwen 2.5 (S)</th>
-                <th>Llama 3.2 (B)</th>
+                <th>Expert Forge</th>
+                <th>Base Logic</th>
                 <th>Delta</th>
             </tr>
         </thead>
@@ -217,42 +201,23 @@ seedBtn.onclick = async () => {
         const resp = await fetch('/api/seed', { method: 'POST' });
         if (resp.ok) {
             fetchSchema();
-            alert("Database seeded successfully with 'employees' and 'departments' tables.");
         }
-    } catch (e) {
-        alert("Seed failed.");
     } finally {
         seedBtn.disabled = false;
         seedBtn.innerText = "SEED SAMPLE DB";
     }
 };
 
-// Reactive typing - influences Core glow
 questionInput.oninput = () => {
     const intensity = Math.min(questionInput.value.length / 100, 1) + 0.5;
     dataCore.children.forEach(c => {
         c.material.emissiveIntensity = intensity;
     });
     gsap.to(crystalGroup.scale, {
-        x: 1 + intensity * 0.1,
-        y: 1 + intensity * 0.1,
-        z: 1 + intensity * 0.1,
+        x: 1 + intensity * 0.1, y: 1 + intensity * 0.1, z: 1 + intensity * 0.1,
         duration: 0.3
     });
 };
-
-// --- API CLIENT ---
-
-async function updateStats() {
-    try {
-        const resp = await fetch('/api/stats');
-        const data = await resp.json();
-        if (data.total > 0) {
-            const acc = (data.ratings['2'] / data.total) * 100;
-            accuracyVal.innerText = acc.toFixed(1) + '%';
-        }
-    } catch (e) {}
-}
 
 forgeBtn.onclick = async () => {
     const q = questionInput.value.trim();
@@ -265,24 +230,14 @@ forgeBtn.onclick = async () => {
     try {
         const resp = await fetch('/api/query', {
             method: 'POST',
-            body: JSON.stringify({
-                question: q,
-                model: currentModel,
-                db_id: "postgres"
-            })
+            body: JSON.stringify({ question: q, model: currentModel, db_id: "postgres" })
         });
         const data = await resp.json();
         raOutput.innerText = data.ra;
         sqlOutput.innerText = data.sql;
-        
         lastGeneration = { question: q, ra: data.ra, sql: data.sql };
-        feedbackWidget.classList.add('hidden');
-        
-        // Activate Execute Button
         executeBtn.disabled = false;
         executeBtn.classList.add('ready');
-
-        // Visual "Data Surge"
         gsap.to(particles.material, { opacity: 0.6, duration: 0.2, yoyo: true, repeat: 1 });
     } finally {
         document.getElementById('loader').classList.add('hidden');
@@ -291,43 +246,29 @@ forgeBtn.onclick = async () => {
 
 executeBtn.onclick = async () => {
     if (!executeBtn.classList.contains('ready')) return;
-
     const sql = sqlOutput.innerText;
     document.getElementById('loader').classList.remove('hidden');
     try {
-        const resp = await fetch('/api/execute', { 
-            method: 'POST', 
-            body: JSON.stringify({ sql }) 
-        });
+        const resp = await fetch('/api/execute', { method: 'POST', body: JSON.stringify({ sql }) });
         const data = await resp.json();
         renderResults(data);
-        if (!data.error) feedbackWidget.classList.remove('hidden');
     } finally {
         document.getElementById('loader').classList.add('hidden');
     }
 };
 
-// Feedback Logging
 document.querySelectorAll('.fb-btn').forEach(btn => {
     btn.onclick = async () => {
         if (!lastGeneration) return;
-        
         const rating = btn.dataset.rating;
         await fetch('/api/feedback', {
             method: 'POST',
             body: JSON.stringify({
-                question: lastGeneration.question,
-                db_id: "postgres",
-                predicted_ra: lastGeneration.ra,
-                generated_sql: lastGeneration.sql,
-                rating: rating
+                question: lastGeneration.question, db_id: "postgres",
+                predicted_ra: lastGeneration.ra, generated_sql: lastGeneration.sql, rating: rating
             })
         });
         
-        feedbackWidget.classList.add('hidden');
-        updateStats();
-        
-        // Flash core colors based on feedback
         const color = rating === "2" ? 0x00ff00 : (rating === "1" ? 0xffff00 : 0xff0000);
         dataCore.children.forEach(c => {
              gsap.to(c.material.color, { r: (color >> 16 & 255) / 255, g: (color >> 8 & 255) / 255, b: (color & 255) / 255, duration: 0.5, yoyo: true, repeat: 1 });
@@ -364,12 +305,11 @@ function renderResults(data) {
     document.getElementById('row-count').innerText = `${data.results.length} rows`;
 }
 
-// Model Selector
 document.querySelectorAll('.model-option').forEach(opt => {
     opt.onclick = () => {
         document.querySelectorAll('.model-option').forEach(o => o.classList.remove('active'));
         opt.classList.add('active');
-        currentModel = opt.dataset.model;
+        currentModel = opt.dataset.mode;
     };
 });
 
@@ -380,12 +320,9 @@ window.onresize = () => {
 };
 
 initThree();
-updateStats();
-setInterval(updateStats, 10000);
 
 document.getElementById('copy-sql').onclick = () => {
     navigator.clipboard.writeText(sqlOutput.innerText);
-    // Visual feedback for copy
     const btn = document.getElementById('copy-sql');
     const old = btn.innerText;
     btn.innerText = "✔️";

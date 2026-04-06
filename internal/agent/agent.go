@@ -9,7 +9,6 @@ import (
 	"strings"
 )
 
-// completionRequest matches the OpenAI /v1/completions request body.
 type completionRequest struct {
 	Model       string  `json:"model"`
 	Prompt      string  `json:"prompt"`
@@ -18,19 +17,23 @@ type completionRequest struct {
 	Stop        string  `json:"stop,omitempty"`
 }
 
-// completionResponse matches the OpenAI /v1/completions response shape.
 type completionResponse struct {
 	Choices []struct {
 		Text string `json:"text"`
 	} `json:"choices"`
 }
 
-// PredictRA calls the local LLM server and returns a Relational Algebra string.
-func PredictRA(question string, dbID string, schemaInfo string, model string) (string, error) {
-	// EXACT MATCH to prompt_style in train.py — newlines and headers must be identical.
+// PredictRA communicates with the local AI server to translate natural language into Relational Algebra.
+func PredictRA(question, dbID, schemaInfo, mode string) (string, error) {
+	// Specialized instructions for different forge intensities
+	instruction := "Convert the natural language question to Relational Algebra."
+	if mode == "frozen" {
+		instruction = "[CORE_STABILIZED] Convert the question to high-precision Relational Algebra logic."
+	}
+
 	promptTemplate := `### Instruction:
-Convert the natural language question to Relational Algebra.
-IMPORTANT: ONLY use tables and columns listed in the Schema below. If no schema is available, do not hallucinate tables; instead, explain that the database is empty.
+%s
+IMPORTANT: ONLY use tables and columns listed in the Schema. Do not hallucinate.
 
 ### Input:
 Question: %s
@@ -40,58 +43,39 @@ Schema: %s
 ### Response:
 RA: `
 
-	fullPrompt := fmt.Sprintf(promptTemplate, question, dbID, schemaInfo)
+	fullPrompt := fmt.Sprintf(promptTemplate, instruction, question, dbID, schemaInfo)
 
 	reqBody := completionRequest{
-		Model:       model,
+		Model:       "ra-sql-model",
 		Prompt:      fullPrompt,
 		MaxTokens:   128,
-		Temperature: 0.0,
+		Temperature: 0.1,
 		Stop:        "\n",
 	}
 
-	bodyBytes, err := json.Marshal(reqBody)
+	bodyBytes, _ := json.Marshal(reqBody)
+	resp, err := http.Post("http://localhost:8000/v1/completions", "application/json", bytes.NewReader(bodyBytes))
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %v", err)
-	}
-
-	resp, err := http.Post(
-		"http://localhost:8000/v1/completions",
-		"application/json",
-		bytes.NewReader(bodyBytes),
-	)
-	if err != nil {
-		return "", fmt.Errorf("failed to reach local AI server: %v", err)
+		return "", fmt.Errorf("AI server unreachable: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("AI server error (Status %d)", resp.StatusCode)
 	}
 
 	var completionResp completionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&completionResp); err != nil {
-		return "", fmt.Errorf("failed to decode response: %v", err)
-	}
-
-	if len(completionResp.Choices) == 0 {
-		return "", fmt.Errorf("server returned no choices")
+	if err := json.NewDecoder(resp.Body).Decode(&completionResp); err != nil || len(completionResp.Choices) == 0 {
+		return "", fmt.Errorf("invalid AI response")
 	}
 
 	raw := completionResp.Choices[0].Text
-
-	// --- CLEANUP ---
-
-	// 1. Standardize line endings and trim whitespace
+	
+	// Post-processing to extract valid RA logic
 	clean := strings.ReplaceAll(raw, "\r\n", "\n")
+	clean = strings.TrimPrefix(strings.TrimSpace(clean), "RA:")
 	clean = strings.TrimSpace(clean)
 
-	// 2. Strip the "RA:" label if the model echoed it
-	clean = strings.TrimPrefix(clean, "RA:")
-	clean = strings.TrimSpace(clean)
-
-	// 3. Find the line that contains actual RA operators (γ, σ, π, ⨝)
 	lines := strings.Split(clean, "\n")
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -100,12 +84,8 @@ RA: `
 		}
 	}
 
-	// 4. Fallback: return the first non-empty line (e.g. plain table name)
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed != "" {
-			return trimmed, nil
-		}
+	if len(lines) > 0 {
+		return strings.TrimSpace(lines[0]), nil
 	}
 
 	return clean, nil

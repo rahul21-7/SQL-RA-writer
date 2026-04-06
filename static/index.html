@@ -38,20 +38,18 @@
                 <h1 class="nav-title">THE SQL <span class="accent">FORGE</span></h1>
             </div>
             <div class="model-selector">
-                <div class="model-option active" data-model="unsloth/Qwen2.5-Coder-1.5B-bnb-4bit">
-                    <span class="model-name">Qwen 2.5</span>
-                    <span class="model-tag">Expert</span>
+                <div class="model-option active" data-mode="standard">
+                    <span class="model-name">STANDARD</span>
                 </div>
-                <div class="model-option" data-model="unsloth/Llama-3.2-1B-bnb-4bit">
-                    <span class="model-name">Llama 3.2</span>
-                    <span class="model-tag">Base</span>
+                <div class="model-option" data-mode="frozen">
+                    <span class="model-name">FROZEN CORE</span>
                 </div>
             </div>
-            <div class="stats-overview">
-                <div class="stat-item">
-                    <span class="stat-label">ACCURACY</span>
-                    <span class="stat-value" id="accuracy-val">--%</span>
-                </div>
+            <div id="feedback-controls" class="feedback-widget">
+                <span class="meta">ORPO FEEDBACK:</span>
+                <button class="fb-btn" data-rating="2" title="Correct">✅</button>
+                <button class="fb-btn" data-rating="1" title="Partial">🟡</button>
+                <button class="fb-btn" data-rating="0" title="Wrong">❌</button>
             </div>
         </header>
 
@@ -119,12 +117,6 @@
                 <div class="panel-header">
                     <h3>EXECUTION RESULTS</h3>
                     <div class="header-right">
-                        <div id="feedback-controls" class="feedback-widget hidden">
-                            <span>Was this correct?</span>
-                            <button class="fb-btn" data-rating="2" title="Correct">✅</button>
-                            <button class="fb-btn" data-rating="1" title="Partial">🟡</button>
-                            <button class="fb-btn" data-rating="0" title="Wrong">❌</button>
-                        </div>
                         <span id="row-count" class="meta">0 rows</span>
                     </div>
                 </div>
