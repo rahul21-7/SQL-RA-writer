@@ -4,7 +4,7 @@ An advanced end-to-end framework for translating Natural Language questions into
 
 ---
 
-## ⚡ Key Features
+## Key Features
 
 - **Relational Algebra First**: Translates natural language into RA logic before SQL generation, ensuring mathematical precision.
 - **Cinematic Web Interface**: Built with Three.js and GSAP for a premium, data-visualized experience.
@@ -14,7 +14,7 @@ An advanced end-to-end framework for translating Natural Language questions into
 
 ---
 
-## 🏛️ Architecture
+## Architecture
 
 - **Frontend**: HTML5, Vanilla CSS, Three.js (3D visualization), GSAP (animations).
 - **Backend**: Go (Go-SQLite for local DBs, HTTP server for API management).
@@ -22,7 +22,7 @@ An advanced end-to-end framework for translating Natural Language questions into
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### 1. Prerequisites
 - **Go** (v1.21+)
@@ -64,10 +64,10 @@ launch_forge.bat
 
 ---
 
-## 🏗️ Model Training (RLHF)
+## Model Training (RLHF)
 
 To train your own "Truly Custom" model using the feedback gathered in the Forge:
-1. Collect feedback via the UI (✅/🟡/❌ buttons).
+1. Collect feedback via the UI (Correct/Partial/Wrong buttons).
 2. Run the specialized training script:
 ```bash
 python python/train_rl.py
@@ -76,7 +76,7 @@ python python/train_rl.py
 
 ---
 
-## 📊 Benchmarks
+## Benchmarks
 
 | Metric | Expert Forge (Qwen 1.5B) | Base Logic (Llama 1B) |
 | :--- | :--- | :--- |

@@ -38,6 +38,7 @@ unsloth_compiled_cache/
 rlhf_model_lora/
 final_model_merged/
 data/database/
+spider.zip
 results*.json
 outputs/
 
