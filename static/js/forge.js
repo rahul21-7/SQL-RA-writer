@@ -148,7 +148,12 @@ async function fetchBenchmarks() {
 }
 
 function renderBenchmarks(data) {
-    if (!data.qwen || !data.llama) return;
+    if (!data || !data.qwen || !data.llama) {
+        benchmarkTable.innerHTML = `<div class="no-benchmarks" style="padding: 15px; color: #888; text-align: center; font-size: 0.9em; line-height: 1.4;">
+            No local benchmark data found.<br>Run <code style="color: #10b981; font-family: monospace;">python python/eval.py</code> to generate results.
+        </div>`;
+        return;
+    }
     const q = data.qwen.your_model;
     const l = data.llama.your_model;
 

@@ -78,11 +78,12 @@ python python/train_rl.py
 
 ## Benchmarks
 
-| Metric | Expert Forge (Qwen 1.5B) | Base Logic (Llama 1B) |
-| :--- | :--- | :--- |
-| **Exact Match %** | 92.0% | 84.0% |
-| **Execution Accuracy** | 94.8% | 88.2% |
-| **RA Validity** | 100.0% | 98.5% |
+To measure the actual accuracy of the model, execute the evaluation script against the Spider dataset:
+```bash
+# Evaluate model outputs (e.g. against the first 100 questions)
+python python/eval.py --n 100
+```
+This generates real-time metrics including Exact Match, Execution Accuracy, and Relational Algebra Validity.
 
 ---
 
